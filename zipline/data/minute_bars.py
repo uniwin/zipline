@@ -561,6 +561,58 @@ class BcolzMinuteBarReader(object):
             value *= self._ohlc_inverse
         return value
 
+    def get_last_value(self, sid, dt, field):
+        """
+        Retrieve the pricing info for the given sid, dt, and field.
+
+        Parameters:
+        -----------
+        sid : int
+            Asset identifier.
+        dt : datetime-like
+            The datetime at which the trade occurred.
+        field : string
+            The type of pricing data to retrieve.
+            ('open', 'high', 'low', 'close', 'volume')
+
+        Returns:
+        --------
+        out : float|int
+
+        The market data for the given sid, dt, and field coordinates.
+
+        For OHLC:
+            Returns a float if a trade occurred at the given dt.
+            If no trade occurred, a np.nan is returned.
+
+        For volume:
+            Returns the integer value of the volume.
+            (A volume of 0 signifies no trades for the given dt.)
+        """
+        minute_pos = self._find_position_of_minute(dt)
+        col = self._open_minute_file(field, sid)
+        value = col[minute_pos]
+        if value != 0:
+            if field == 'volume':
+                return dt, value
+            else:
+                return dt, value * self._ohlc_inverse
+        else:
+            while True:
+                if minute_pos == 0:
+                    return pd.NaT, np.nan
+                chunksize = 780
+                start = max(0, minute_pos - chunksize)
+                candidates = col[start:minute_pos]
+                for i in xrange(len(candidates) - 1, start, -1):
+                    value = candidates[i]
+                    if value != 0:
+                        if field == 'volume':
+                            return self._minute_index[i], value
+                        else:
+                            return self._minute_index[i], value * self._ohlc_inverse
+                minute_pos = start
+
     def get_last_traded_dt(self, asset, dt):
         minute_pos = self._find_last_traded_position(asset, dt)
         if minute_pos == -1:

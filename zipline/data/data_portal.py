@@ -271,7 +271,7 @@ class DataPortal(object):
 
         field: string
             The desired field of the asset.  Valid values are "open",
-            "open_price", "high", "low", "close", "close_price", "volume", and
+        "open_price", "high", "low", "close", "close_price", "volume", and
             "price".
 
         dt: pd.Timestamp
@@ -430,15 +430,9 @@ class DataPortal(object):
         # if dt is before the first market minute, minute_index
         # will be 0.  if it's after the last market minute, it'll
         # be len(minutes_for_day)
-        last_traded_dt = \
-            self._equity_minute_reader.get_last_traded_dt(asset, dt)
-
-        if last_traded_dt is pd.NaT:
-            return 0
-
-        result = self._equity_minute_reader.get_value(
+        last_traded_dt, result = self._equity_minute_reader.get_last_value(
             asset.sid,
-            last_traded_dt,
+            dt,
             column
         )
 
