@@ -69,6 +69,7 @@ ext_modules = LazyCythonizingList([
     ('zipline.lib.rank', ['zipline/lib/rank.pyx']),
     ('zipline.data._equities', ['zipline/data/_equities.pyx']),
     ('zipline.data._adjustments', ['zipline/data/_adjustments.pyx']),
+    ('zipline.data._data_portal', ['zipline/data/_data_portal.pyx']),
     ('zipline._protocol', ['zipline/_protocol.pyx']),
     ('zipline.gens.sim_engine', ['zipline/gens/sim_engine.pyx']),
 ])

@@ -24,6 +24,7 @@ from six import iteritems
 from six.moves import reduce
 
 from zipline.assets import Asset, Future, Equity
+from zipline.data._data_portal import _apply_adjustments_to_window
 from zipline.data.us_equity_pricing import NoDataOnDate
 
 from zipline.utils import tradingcalendar
@@ -940,31 +941,32 @@ class DataPortal(object):
         -------
         None.  The data array is modified in place.
         """
-        self._apply_adjustments_to_window(
+        dts_i8 = dts.asi8
+        _apply_adjustments_to_window(
             self._get_adjustment_list(
                 asset, self._splits_dict, "SPLITS"
             ),
             data,
-            dts,
+            dts_i8,
             field != 'volume'
         )
 
         if field != 'volume':
-            self._apply_adjustments_to_window(
+            _apply_adjustments_to_window(
                 self._get_adjustment_list(
                     asset, self._mergers_dict, "MERGERS"
                 ),
                 data,
-                dts,
+                dts_i8,
                 True
             )
 
-            self._apply_adjustments_to_window(
+            _apply_adjustments_to_window(
                 self._get_adjustment_list(
                     asset, self._dividends_dict, "DIVIDENDS"
                 ),
                 data,
-                dts,
+                dts_i8,
                 True
             )
 
@@ -1046,39 +1048,6 @@ class DataPortal(object):
             )
 
         return return_array
-
-    @staticmethod
-    def _apply_adjustments_to_window(adjustments_list, window_data,
-                                     dts_in_window, multiply):
-        if len(adjustments_list) == 0:
-            return
-
-        # advance idx to the correct spot in the adjustments list, based on
-        # when the window starts
-        idx = 0
-
-        while idx < len(adjustments_list) and dts_in_window[0] >\
-                adjustments_list[idx][0]:
-            idx += 1
-
-        # if we've advanced through all the adjustments, then there's nothing
-        # to do.
-        if idx == len(adjustments_list):
-            return
-
-        while idx < len(adjustments_list):
-            adjustment_to_apply = adjustments_list[idx]
-
-            if adjustment_to_apply[0] > dts_in_window[-1]:
-                break
-
-            range_end = dts_in_window.searchsorted(adjustment_to_apply[0])
-            if multiply:
-                window_data[0:range_end] *= adjustment_to_apply[1]
-            else:
-                window_data[0:range_end] /= adjustment_to_apply[1]
-
-            idx += 1
 
     def _get_adjustment_list(self, asset, adjustments_dict, table_name):
         """
