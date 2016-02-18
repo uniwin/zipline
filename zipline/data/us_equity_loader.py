@@ -1,4 +1,4 @@
-# Copyright 2015 Quantopian, Inc.
+# Copyright 2016 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,8 +13,8 @@
 # limitations under the License.
 
 from zipline.pipeline.data.equity_pricing import USEquityPricing
-#from zipline.lib._float64window import AdjustedArrayWindow as Float64Window
-#from zilpnie.lib._int64window import AdjustedArrayWindow as Int64Window
+from zipline.lib._float64window import AdjustedArrayWindow as Float64Window
+from zipline.lib._int64window import AdjustedArrayWindow as Int64Window
 
 ##
 
@@ -63,7 +63,11 @@ class USEquityHistoryLoader(object):
         array = self._daily_reader.load_raw_arrays(
             [col], start, prefetch_end, [asset])[0][:, 0]
         days = cal[start_ix:prefetch_end_ix]
-        adjs = self._adjustments_reader.load_adjustments([col], days, [asset])
+        if self._adjustments_reader:
+            adjs = self._adjustments_reader.load_adjustments(
+                [col], days, [asset])
+        else:
+            adjs = []
         block = Block(array, adjs, start_ix, prefetch_end_ix)
         self._daily_window_blocks[asset] = block
 

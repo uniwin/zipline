@@ -639,12 +639,13 @@ class PanelDailyBarReader(DailyBarReader):
             panel.loc[:, :, 'volume'] = int(1e9)
 
         self.first_trading_day = panel.major_axis[0]
+        self._calendar = panel.major_axis
 
         self.panel = panel
 
     def load_raw_arrays(self, columns, start_date, end_date, assets):
-        # TODO: Implementing will enable pipeline with a Panel input.
-        raise NotImplementedError()
+        names = [col.name for col in columns]
+        return self.panel[names, start_date:end_date, assets].values
 
     def history_window(self, column, start_date, end_date, sid):
         """
