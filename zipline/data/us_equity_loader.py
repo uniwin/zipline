@@ -69,10 +69,11 @@ class USEquityHistoryLoader(object):
         else:
             adjs = []
         block = Block(array, adjs, start_ix, prefetch_end_ix)
-        self._daily_window_blocks[asset] = block
+        self._daily_window_blocks[(asset, field)] = block
 
     def history(self, asset, start, end, field):
         start_ix = self._calendar.get_loc(start)
         end_ix = self._calendar.get_loc(end)
         self._ensure_block(asset, start, end, start_ix, end_ix, field)
-        return self._daily_window_blocks[asset].get_slice(start_ix, end_ix)
+        return self._daily_window_blocks[(asset, field)].get_slice(
+            start_ix, end_ix)
