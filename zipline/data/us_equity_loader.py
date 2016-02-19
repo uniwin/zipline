@@ -48,11 +48,11 @@ class USEquityHistoryLoader(object):
 
         self._daily_window_blocks = {}
 
-    def _ensure_block(self, asset, start, end, start_ix, end_ix, field):
+    def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):
         try:
-            block = self._daily_window_blocks[asset]
+            block = self._daily_window_blocks[(asset, field, size)]
             if start_ix >= block.cal_start and end_ix <= block.cal_end:
-                return
+                return block
         except KeyError:
             pass
 
@@ -69,11 +69,11 @@ class USEquityHistoryLoader(object):
         else:
             adjs = []
         block = Block(array, adjs, start_ix, prefetch_end_ix)
-        self._daily_window_blocks[(asset, field)] = block
+        self._daily_window_blocks[(asset, field, size)] = block
+        return block
 
-    def history(self, asset, start, end, field):
+    def history(self, asset, start, end, size, field):
         start_ix = self._calendar.get_loc(start)
         end_ix = self._calendar.get_loc(end)
-        self._ensure_block(asset, start, end, start_ix, end_ix, field)
-        return self._daily_window_blocks[(asset, field)].get_slice(
-            start_ix, end_ix)
+        block = self._ensure_block(asset, start, end, size, start_ix, end_ix, field)
+        return block.get_slice(start_ix, end_ix)

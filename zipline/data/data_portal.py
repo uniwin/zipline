@@ -1087,6 +1087,7 @@ class DataPortal(object):
             data = self._equity_history_loader.history(asset,
                                                        active_days[0],
                                                        active_days[-1],
+                                                       len(active_days),
                                                        field)
             return_array[day_slice] = data
             self._apply_all_adjustments(
