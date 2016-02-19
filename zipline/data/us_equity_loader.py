@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from numpy import dtype
+
 from zipline.pipeline.data.equity_pricing import USEquityPricing
 from zipline.lib._float64window import AdjustedArrayWindow as Float64Window
 from zipline.lib._int64window import AdjustedArrayWindow as Int64Window
+from zipline.lib.adjustment import Float64Multiply
 
 ##
 
@@ -28,16 +31,18 @@ from zipline.lib._int64window import AdjustedArrayWindow as Int64Window
 
 class Block(object):
 
-    def __init__(self, array, adjustments, cal_start, cal_end):
-        self.array = array
-        self.adjustments = adjustments
+    def __init__(self, window, offset, cal_start, cal_end):
+        self.window = window
         self.cal_start = cal_start
         self.cal_end = cal_end
+        self.offset = offset
+        self.current = next(window)
 
-    def get_slice(self, start_ix, end_ix):
-        return self.array[
-            start_ix - self.cal_start:end_ix - self.cal_start + 1]
-
+    def get(self, end_ix):
+        # TODO: Get this working and boundary condition.
+        while self.window.anchor < end_ix - self.offset:
+            self.current = next(self.window)
+        return self.current
 
 class USEquityHistoryLoader(object):
 
@@ -47,6 +52,50 @@ class USEquityHistoryLoader(object):
         self._adjustments_reader = adjustment_reader
 
         self._daily_window_blocks = {}
+
+    def _get_adjustments_in_range(self, asset, days, field):
+        # TODO Move from data portal.
+        # Consider interval tree.
+        sid = int(asset)
+        start = days[0]
+        end = days[-1]
+        adjs = []
+        if field != 'volume':
+            mergers = self._adjustments_reader.get_adjustments_for_sid(
+                'mergers', sid)
+            for m in mergers:
+                dt = m[0]
+                if start < dt <= end:
+                    adjs.append(Float64Multiply(0,
+                                                max(days.get_loc(dt) - 1, 0),
+                                                0,
+                                                0,
+                                                m[1]))
+            divs = self._adjustments_reader.get_adjustments_for_sid(
+                'dividends', sid)
+            for d in divs:
+                dt = d[0]
+                if start < dt <= end:
+                    adjs.append(Float64Multiply(0,
+                                                max(days.get_loc(dt) - 1, 0),
+                                                0,
+                                                0,
+                                                d[1]))
+        splits = self._adjustments_reader.get_adjustments_for_sid(
+            'splits', sid)
+        for s in splits:
+            dt = s[0]
+            if field == 'volume':
+                ratio = s[1] / 1.0
+            else:
+                ratio = s[1]
+            if start < dt <= end:
+                adjs.append(Float64Multiply(0,
+                                            max(days.get_loc(dt) - 1, 0),
+                                            0,
+                                            0,
+                                            s[1]))
+        return adjs
 
     def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):
         try:
@@ -61,14 +110,21 @@ class USEquityHistoryLoader(object):
         prefetch_end_ix = min(end_ix + 40, len(cal) - 1)
         prefetch_end = cal[prefetch_end_ix]
         array = self._daily_reader.load_raw_arrays(
-            [col], start, prefetch_end, [asset])[0][:, 0]
+            [col], start, prefetch_end, [asset])[0]
         days = cal[start_ix:prefetch_end_ix]
         if self._adjustments_reader:
-            adjs = self._adjustments_reader.load_adjustments(
-                [col], days, [asset])
+            adjs = self._get_adjustments_in_range(asset, days, col)
         else:
             adjs = []
-        block = Block(array, adjs, start_ix, prefetch_end_ix)
+        window = Float64Window(
+            array,
+            dtype('float64'),
+            dict(enumerate(adjs)),
+            0,
+            size
+        )
+        offset = 'TODO' # getting this offset is last piece.
+        block = Block(window, offset, start_ix, prefetch_end_ix)
         self._daily_window_blocks[(asset, field, size)] = block
         return block
 
@@ -76,4 +132,5 @@ class USEquityHistoryLoader(object):
         start_ix = self._calendar.get_loc(start)
         end_ix = self._calendar.get_loc(end)
         block = self._ensure_block(asset, start, end, size, start_ix, end_ix, field)
-        return block.get_slice(start_ix, end_ix)
+        # TODO: get most recent value from Window
+        return block.get(end_ix)
