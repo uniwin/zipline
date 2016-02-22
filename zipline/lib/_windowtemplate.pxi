@@ -101,9 +101,6 @@ cdef class AdjustedArrayWindow:
             self.next_adj = self.pop_next_adj()
 
         start = anchor - self.window_length
-        print "anchor={0}".format(anchor)
-        print "start={0}".format(start)
-        print "window_length={0}".format(self.window_length)
         out = asarray(self.data[start:self.anchor]).view(self.viewtype)
         out.setflags(write=False)
 

@@ -311,7 +311,8 @@ class HistoryTestCaseBase(TestCase):
 
                     np.testing.assert_array_equal(
                         np.array(range(base + idx - 9, base + idx + 1)),
-                        asset2_series
+                        asset2_series,
+                        " ".join(str(x) for x in [asset2_series, idx, dt, mode]),
                     )
 
                     np.testing.assert_array_equal(

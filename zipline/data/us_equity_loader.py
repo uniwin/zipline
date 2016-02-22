@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from numpy import dtype
+from numpy import dtype, around
 
 from zipline.pipeline.data.equity_pricing import USEquityPricing
 from zipline.lib._float64window import AdjustedArrayWindow as Float64Window
@@ -35,13 +35,13 @@ class Block(object):
         self.window = window
         self.cal_start = cal_start
         self.cal_end = cal_end
-        self.current = next(window)
+        self.current = around(next(window), 3)
 
     def get(self, end_ix):
         # TODO: Get this working and boundary condition.
         anchor = end_ix - self.cal_start
         while self.window.anchor < anchor:
-            self.current = next(self.window)
+            self.current = around(next(self.window), 3)
         return self.current[:, 0]
 
 
@@ -65,9 +65,9 @@ class USEquityHistoryLoader(object):
             for m in mergers:
                 dt = m[0]
                 if start < dt <= end:
-                    end_loc = max(days.get_loc(dt) - 1, 0)
+                    end_loc = days.get_loc(dt)
                     adjs[end_loc] = [Float64Multiply(0,
-                                                     end_loc,
+                                                     end_loc - 1,
                                                      0,
                                                      0,
                                                      m[1])]
@@ -79,7 +79,7 @@ class USEquityHistoryLoader(object):
                     if start < dt <= end:
                         end_loc = days.get_loc(dt)
                         adjs[end_loc] = [Float64Multiply(0,
-                                                         end_loc,
+                                                         end_loc - 1,
                                                          0,
                                                          0,
                                                          d[1])]
@@ -92,14 +92,12 @@ class USEquityHistoryLoader(object):
             else:
                 ratio = s[1]
             if start < dt <= end:
-                end_loc = max(days.get_loc(dt) - 1, 0)
+                end_loc = days.get_loc(dt)
                 adjs[end_loc] = [Float64Multiply(0,
-                                                 end_loc,
+                                                 end_loc - 1,
                                                  0,
                                                  0,
                                                  ratio)]
-        print days
-        print adjs
         return adjs
 
     def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):
