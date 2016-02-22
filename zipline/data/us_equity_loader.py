@@ -31,16 +31,16 @@ from zipline.lib.adjustment import Float64Multiply
 
 class Block(object):
 
-    def __init__(self, window, offset, cal_start, cal_end):
+    def __init__(self, window, cal_start, cal_end):
         self.window = window
         self.cal_start = cal_start
         self.cal_end = cal_end
-        self.offset = offset
         self.current = next(window)
 
     def get(self, end_ix):
         # TODO: Get this working and boundary condition.
-        while self.window.anchor < end_ix - self.offset:
+        anchor = end_ix - self.cal_start
+        while self.window.anchor < anchor:
             self.current = next(self.window)
         return self.current
 
@@ -94,7 +94,7 @@ class USEquityHistoryLoader(object):
                                             max(days.get_loc(dt) - 1, 0),
                                             0,
                                             0,
-                                            s[1]))
+                                            ratio))
         return adjs
 
     def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):
@@ -116,15 +116,22 @@ class USEquityHistoryLoader(object):
             adjs = self._get_adjustments_in_range(asset, days, col)
         else:
             adjs = []
-        window = Float64Window(
+        if field == 'volume':
+            window_type = Int64Window
+            dtype_ = dtype('int64')
+            array = array.astype('int64')
+        else:
+            window_type = Float64Window
+            dtype_ = dtype('float64')
+
+        window = window_type(
             array,
-            dtype('float64'),
+            dtype_,
             dict(enumerate(adjs)),
             0,
             size
         )
-        offset = 'TODO' # getting this offset is last piece.
-        block = Block(window, offset, start_ix, prefetch_end_ix)
+        block = Block(window, start_ix, prefetch_end_ix)
         self._daily_window_blocks[(asset, field, size)] = block
         return block
 
