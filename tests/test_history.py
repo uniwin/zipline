@@ -1009,7 +1009,8 @@ class DailyEquityHistoryTestCase(HistoryTestCaseBase):
                     if field in OHLCP:
                         self.assertEqual(
                             3 + MINUTE_FIELD_INFO[field],
-                            asset_series.iloc[0]
+                            asset_series.iloc[0],
+                            (field, asset_series),
                         )
 
                         self.assertTrue(np.isnan(asset_series.iloc[1]))

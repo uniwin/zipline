@@ -39,7 +39,7 @@ class Block(object):
 
     def get(self, end_ix):
         # TODO: Get this working and boundary condition.
-        anchor = end_ix - self.cal_start
+        anchor = end_ix - self.cal_start + 1
         while self.window.anchor < anchor:
             self.current = next(self.window)
         return self.current
@@ -138,6 +138,7 @@ class USEquityHistoryLoader(object):
     def history(self, asset, start, end, size, field):
         start_ix = self._calendar.get_loc(start)
         end_ix = self._calendar.get_loc(end)
-        block = self._ensure_block(asset, start, end, size, start_ix, end_ix, field)
+        block = self._ensure_block(
+            asset, start, end, size, start_ix, end_ix, field)
         # TODO: get most recent value from Window
         return block.get(end_ix)
