@@ -944,14 +944,6 @@ class DataPortal(object):
 
         return_data[0:len(data_to_copy)] = data_to_copy
 
-        self._apply_all_adjustments(
-            return_data,
-            asset,
-            minutes_for_window,
-            field,
-            self.MINUTE_PRICE_ADJUSTMENT_FACTOR
-        )
-
         return return_data
 
     def _apply_all_adjustments(self, data, asset, dts, field,
