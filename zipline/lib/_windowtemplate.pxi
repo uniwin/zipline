@@ -95,13 +95,13 @@ cdef class AdjustedArrayWindow:
         # for which we're calculating a window.
         while self.next_adj < anchor:
 
-            print self.adjustments
             for adjustment in self.adjustments[self.next_adj]:
                 adjustment.mutate(self.data)
 
             self.next_adj = self.pop_next_adj()
 
         start = anchor - self.window_length
+        print "anchor={0}".format(anchor)
         print "start={0}".format(start)
         print "window_length={0}".format(self.window_length)
         out = asarray(self.data[start:self.anchor]).view(self.viewtype)

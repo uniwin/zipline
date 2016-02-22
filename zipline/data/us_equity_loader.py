@@ -39,10 +39,11 @@ class Block(object):
 
     def get(self, end_ix):
         # TODO: Get this working and boundary condition.
-        anchor = end_ix - self.cal_start + 1
+        anchor = end_ix - self.cal_start
         while self.window.anchor < anchor:
             self.current = next(self.window)
-        return self.current
+        return self.current[:, 0]
+
 
 class USEquityHistoryLoader(object):
 
@@ -54,8 +55,6 @@ class USEquityHistoryLoader(object):
         self._daily_window_blocks = {}
 
     def _get_adjustments_in_range(self, asset, days, field):
-        # TODO Move from data portal.
-        # Consider interval tree.
         sid = int(asset)
         start = days[0]
         end = days[-1]
@@ -74,15 +73,16 @@ class USEquityHistoryLoader(object):
                                                      m[1])]
             divs = self._adjustments_reader.get_adjustments_for_sid(
                 'dividends', sid)
-            for d in divs:
-                dt = d[0]
-                if start < dt <= end:
-                    end_loc = max(days.get_loc(dt) - 1, 0)
-                    adjs[end_loc] = [Float64Multiply(0,
-                                                     end_loc,
-                                                     0,
-                                                     0,
-                                                     d[1])]
+            if field != 'volume':
+                for d in divs:
+                    dt = d[0]
+                    if start < dt <= end:
+                        end_loc = days.get_loc(dt)
+                        adjs[end_loc] = [Float64Multiply(0,
+                                                         end_loc,
+                                                         0,
+                                                         0,
+                                                         d[1])]
         splits = self._adjustments_reader.get_adjustments_for_sid(
             'splits', sid)
         for s in splits:
@@ -98,6 +98,8 @@ class USEquityHistoryLoader(object):
                                                  0,
                                                  0,
                                                  ratio)]
+        print days
+        print adjs
         return adjs
 
     def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):

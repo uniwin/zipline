@@ -1090,12 +1090,6 @@ class DataPortal(object):
                                                        len(active_days),
                                                        field)
             return_array[day_slice] = data
-            self._apply_all_adjustments(
-                return_array,
-                asset,
-                active_days,
-                field,
-            )
 
         return return_array
 
