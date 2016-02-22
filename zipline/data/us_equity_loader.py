@@ -59,28 +59,30 @@ class USEquityHistoryLoader(object):
         sid = int(asset)
         start = days[0]
         end = days[-1]
-        adjs = []
+        adjs = {}
         if field != 'volume':
             mergers = self._adjustments_reader.get_adjustments_for_sid(
                 'mergers', sid)
             for m in mergers:
                 dt = m[0]
                 if start < dt <= end:
-                    adjs.append(Float64Multiply(0,
-                                                max(days.get_loc(dt) - 1, 0),
-                                                0,
-                                                0,
-                                                m[1]))
+                    end_loc = max(days.get_loc(dt) - 1, 0)
+                    adjs[end_loc] = [Float64Multiply(0,
+                                                     end_loc,
+                                                     0,
+                                                     0,
+                                                     m[1])]
             divs = self._adjustments_reader.get_adjustments_for_sid(
                 'dividends', sid)
             for d in divs:
                 dt = d[0]
                 if start < dt <= end:
-                    adjs.append(Float64Multiply(0,
-                                                max(days.get_loc(dt) - 1, 0),
-                                                0,
-                                                0,
-                                                d[1]))
+                    end_loc = max(days.get_loc(dt) - 1, 0)
+                    adjs[end_loc] = [Float64Multiply(0,
+                                                     end_loc,
+                                                     0,
+                                                     0,
+                                                     d[1])]
         splits = self._adjustments_reader.get_adjustments_for_sid(
             'splits', sid)
         for s in splits:
@@ -90,11 +92,12 @@ class USEquityHistoryLoader(object):
             else:
                 ratio = s[1]
             if start < dt <= end:
-                adjs.append(Float64Multiply(0,
-                                            max(days.get_loc(dt) - 1, 0),
-                                            0,
-                                            0,
-                                            ratio))
+                end_loc = max(days.get_loc(dt) - 1, 0)
+                adjs[end_loc] = [Float64Multiply(0,
+                                                 end_loc,
+                                                 0,
+                                                 0,
+                                                 ratio)]
         return adjs
 
     def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):
@@ -115,7 +118,7 @@ class USEquityHistoryLoader(object):
         if self._adjustments_reader:
             adjs = self._get_adjustments_in_range(asset, days, col)
         else:
-            adjs = []
+            adjs = {}
         if field == 'volume':
             window_type = Int64Window
             dtype_ = dtype('int64')
@@ -127,7 +130,7 @@ class USEquityHistoryLoader(object):
         window = window_type(
             array,
             dtype_,
-            dict(enumerate(adjs)),
+            adjs,
             0,
             size
         )
