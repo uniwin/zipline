@@ -90,6 +90,7 @@ from zipline.utils.events import DateRuleFactory, TimeRuleFactory, Always
 from zipline.algorithm import TradingAlgorithm
 from zipline.finance.trading import TradingEnvironment
 from zipline.finance.commission import PerShare
+from zipline.finance.cancel_policy import NeverCancel
 
 from zipline.utils.test_utils import (
     create_data_portal,
@@ -878,6 +879,7 @@ class TestTransformAlgorithm(TestCase):
             )
 
             algo = algo_class(sim_params=sim_params, env=env)
+            algo.cancel_policy = NeverCancel()
             algo.run(data_portal)
         finally:
             tempdir.cleanup()
