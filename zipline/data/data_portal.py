@@ -529,18 +529,20 @@ class DataPortal(object):
 
         data = []
 
+        e_assets = []
+
         for asset in assets:
             if isinstance(asset, Future):
                 data.append(self._get_history_daily_window_future(
                     asset, days_for_window, end_dt, field_to_use
                 ))
             else:
-                data.append(self._get_history_daily_window_equity(
-                    asset, days_for_window, end_dt, field_to_use
-                ))
-
+                e_assets.append(asset)
+        e_data = self._get_history_daily_window_equities(
+            e_assets, days_for_window, end_dt, field_to_use
+        )
         return pd.DataFrame(
-            np.array(data).T,
+            e_data,
             index=days_for_window,
             columns=assets
         )
@@ -606,20 +608,17 @@ class DataPortal(object):
     def _get_market_minutes_for_day(self, end_date):
         return self.env.market_minutes_for_day(pd.Timestamp(end_date))
 
-    def _get_history_daily_window_equity(self, asset, days_for_window,
-                                         end_dt, field_to_use):
+    def _get_history_daily_window_equities(
+            self, assets, days_for_window, end_dt, field_to_use):
         ends_at_midnight = end_dt.hour == 0 and end_dt.minute == 0
 
-        # get the start and end dates for this sid
-        end_date = self._get_asset_end_date(asset)
-
-        if ends_at_midnight or (days_for_window[-1] > end_date):
+        if ends_at_midnight:
             # two cases where we use daily data for the whole range:
             # 1) the history window ends at midnight utc.
             # 2) the last desired day of the window is after the
             # last trading day, use daily data for the whole range.
-            return self._get_daily_window_for_sid(
-                asset,
+            return self._get_daily_window_for_sids(
+                assets,
                 field_to_use,
                 days_for_window,
                 extra_slot=False
@@ -635,14 +634,14 @@ class DataPortal(object):
             minutes_for_partial_day =\
                 all_minutes_for_day[0:(last_minute_idx + 1)]
 
-            daily_data = self._get_daily_window_for_sid(
-                asset,
+            daily_data = self._get_daily_window_for_sids(
+                assets,
                 field_to_use,
                 days_for_window[0:-1]
             )
 
             minute_data = self._get_minute_window_for_equity(
-                asset,
+                assets,
                 field_to_use,
                 minutes_for_partial_day
             )
@@ -1020,8 +1019,8 @@ class DataPortal(object):
 
         np.around(data, 3, out=data)
 
-    def _get_daily_window_for_sid(self, asset, field, days_in_window,
-                                  extra_slot=True):
+    def _get_daily_window_for_sids(
+            self, assets, field, days_in_window, extra_slot=True):
         """
         Internal method that gets a window of adjusted daily data for a sid
         and specified date range.  Used to support the history API method for
@@ -1029,7 +1028,7 @@ class DataPortal(object):
 
         Parameters
         ----------
-        asset : Asset
+        assets : Asset
             The asset whose data is desired.
 
         start_dt: pandas.Timestamp
@@ -1056,40 +1055,30 @@ class DataPortal(object):
         bar_count = len(days_in_window)
         # create an np.array of size bar_count
         if extra_slot:
-            return_array = np.zeros((bar_count + 1,))
+            return_array = np.zeros((bar_count + 1, len(assets)))
         else:
-            return_array = np.zeros((bar_count,))
+            return_array = np.zeros((bar_count, len(assets)))
 
         if field != "volume":
             # volumes default to 0, so we don't need to put NaNs in the array
             return_array[:] = np.NAN
 
-        start_date = self._get_asset_start_date(asset)
-        end_date = self._get_asset_end_date(asset)
-        day_slice = days_in_window.slice_indexer(start_date, end_date)
-        active_days = days_in_window[day_slice]
-
-        if len(active_days) == 0:
-            return return_array
-
-        if active_days[-1] == end_date:
-            # since we don't have data for the last day, don't try to get it
-            day_slice = slice(day_slice.start, day_slice.stop - 1)
-            active_days = days_in_window[day_slice]
-
-        if len(active_days) > 0:
-            data = self._equity_daily_reader.history_window(field,
-                                                            active_days[0],
-                                                            active_days[-1],
-                                                            asset)
-            return_array[day_slice] = data
+        for i, asset in enumerate(assets):
+            data = self._equity_daily_reader.history_window(
+                field,
+                days_in_window[0],
+                days_in_window[-1],
+                asset)
             self._apply_all_adjustments(
-                return_array,
+                data,
                 asset,
-                active_days,
+                days_in_window,
                 field,
             )
-
+            if extra_slot:
+                return_array[:len(return_array) - 1, i] = data
+            else:
+                return_array[:, i] = data
         return return_array
 
     @staticmethod
