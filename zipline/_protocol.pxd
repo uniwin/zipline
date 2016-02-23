@@ -24,6 +24,11 @@ cdef class BarData:
     cdef object _create_sid_view(BarData, object)
     cdef bool _is_stale_for_asset(BarData, object, object, object)
     cdef bool _can_trade_for_asset(BarData, object, object, object)
+    cdef object _calculate_universe(BarData)
+    cdef object _universe_func
+    cdef object _universe_last_updated_at
+    cdef object _last_calculated_universe
+
 
 cdef class SidView:
     cdef object asset

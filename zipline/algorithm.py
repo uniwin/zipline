@@ -450,7 +450,21 @@ class TradingAlgorithm(object):
             sim_params,
             self.data_portal,
             self._create_clock(),
-            self._create_benchmark_source()
+            self._create_benchmark_source(),
+            universe_func=self._calculate_universe
+        )
+
+    def _calculate_universe(self):
+        # this exists to provide backwards compatibility for older,
+        # deprecated APIs, particularly around the iterability of
+        # BarData (ie, 'for sid in data).
+
+        # our universe is the intersection of:
+        # 1) all assets in our positions
+        # 2) all assets in open orders
+        return set(
+            self.perf_tracker.position_tracker.positions.keys() +
+            self.blotter.open_orders.keys()
         )
 
     def get_generator(self):

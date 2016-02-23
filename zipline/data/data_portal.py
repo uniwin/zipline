@@ -25,8 +25,13 @@ from six.moves import reduce
 
 from zipline.assets import Asset, Future, Equity
 from zipline.data.us_equity_pricing import NoDataOnDate
-
 from zipline.utils import tradingcalendar
+from zipline.utils.algo_instance import get_algo_instance
+from zipline.utils.math_utils import (
+    nansum,
+    nanmean,
+    nanstd
+)
 from zipline.utils.memoize import remember_last
 from zipline.errors import (
     NoTradeDataAvailableTooEarly,
@@ -1323,3 +1328,56 @@ class DataPortal(object):
                       if isinstance(asset, Asset)]
 
         return asset_list
+
+    def get_simple_transform(self, asset, transform_name, bars=None):
+        # very ugly.
+        now = pd.Timestamp(get_algo_instance().datetime, tz='UTC')
+
+        if transform_name == "returns":
+            # returns is always calculated over the last 2 days, even though
+            # we only support minutely backtests now.
+            hst = self.get_history_window(
+                [asset],
+                now,
+                2,
+                "1d",
+                "price",
+                ffill=True
+            )[asset]
+
+            return (hst.iloc[-1] - hst.iloc[0]) / hst.iloc[0]
+
+        if bars is None:
+            raise ValueError("bars cannot be None!")
+
+        price_arr = self.get_history_window(
+            [asset],
+            now,
+            bars,
+            "1m",
+            "price",
+            ffill=True
+        )[asset]
+
+        if transform_name == "mavg":
+            return nanmean(price_arr)
+        elif transform_name == "stddev":
+            return nanstd(price_arr, ddof=1)
+        elif transform_name == "vwap":
+            volume_arr = self.get_history_window(
+                [asset],
+                now,
+                bars,
+                "1m",
+                "volume",
+                ffill=True
+            )[asset]
+
+            vol_sum = nansum(volume_arr)
+
+            try:
+                ret = nansum(price_arr * volume_arr) / vol_sum
+            except ZeroDivisionError:
+                ret = np.nan
+
+            return ret

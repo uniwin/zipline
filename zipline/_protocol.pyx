@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 
 from pandas.tslib import normalize_date
 import pandas as pd
@@ -20,6 +21,7 @@ import numpy as np
 from cpython cimport bool
 
 from zipline.assets import Asset
+from zipline.zipline_deprecation_warning import ZiplineDeprecationWarning
 
 cdef class BarData:
     """
@@ -29,7 +31,8 @@ cdef class BarData:
 
     This is what is passed as `data` to the `handle_data` function.
     """
-    def __init__(self, data_portal, simulation_dt_func, data_frequency):
+    def __init__(self, data_portal, simulation_dt_func, data_frequency,
+                 universe_func):
         """
         Parameters
         ---------
@@ -49,6 +52,10 @@ cdef class BarData:
         self.data_frequency = data_frequency
         self._views = {}
 
+        self._universe_func = universe_func
+        self._last_calculated_universe = None
+        self._universe_last_updated_at = None
+
     cdef _get_equity_price_view(self, asset):
         """
         Returns a DataPortalSidView for the given asset.  Used to support the
@@ -64,6 +71,7 @@ cdef class BarData:
         SidView: Accessor into the given asset's data.
         """
         try:
+            self._warn_user("Stop using old data access pattern!")
             view = self._views[asset]
         except KeyError:
             try:
@@ -372,15 +380,6 @@ cdef class BarData:
                 # minor axis: assets
                 return pd.Panel(df_dict)
 
-    def __iter__(self):
-        raise ValueError("'BarData' object is not iterable")
-
-    def __contains__(self, name):
-        raise ValueError("'BarData' object is not iterable")
-
-    def __getitem__(self, name):
-        return self._get_equity_price_view(name)
-
     property current_dt:
         def __get__(self):
             return self.simulation_dt_func()
@@ -391,8 +390,70 @@ cdef class BarData:
             normalize_date(self.simulation_dt_func())
         )
 
+    #################
+    # OLD API SUPPORT
+    #################
+    cdef _calculate_universe(self):
+        if self._universe_func is None:
+            return []
+
+        simulation_dt = self.simulation_dt_func()
+        if self._last_calculated_universe is None or \
+                self._universe_last_updated_at != simulation_dt:
+
+            self._last_calculated_universe = self._universe_func()
+            self._universe_last_updated_at = simulation_dt
+
+        return self._last_calculated_universe
+
+    def __iter__(self):
+        self._warn_user("Iterating over the assets in `data` is "
+                        "deprecated.")
+        for asset in self._calculate_universe():
+            yield asset
+
+    def __contains__(self, asset):
+        self._warn_user("Checking whether an asset is in data is "
+                        "deprecated.")
+        universe = self._calculate_universe()
+        return asset in universe
+
+    def iteritems(self):
+        self._warn_user("Iterating over the assets in `data` is "
+                        "deprecated.")
+        for asset in self._calculate_universe():
+            yield asset, self[asset]
+
+    def __len__(self):
+        self._warn_user("Iterating over the assets in `data` is "
+                        "deprecated.")
+
+        return len(self._calculate_universe())
+
+    def keys(self):
+        self._warn_user("Iterating over the assets in `data` is "
+                        "deprecated.")
+
+        return list(self._calculate_universe())
+
+    def iterkeys(self):
+        iter(self.keys())
+
+    def __getitem__(self, name):
+        return self._get_equity_price_view(name)
+
+    @staticmethod
+    def _warn_user(msg):
+        warnings.warn(
+            msg,
+            category=ZiplineDeprecationWarning,
+            stacklevel=1
+        )
 
 cdef class SidView:
+    """
+    This class exists to temporarily support the deprecated data[sid(N)] API.
+    """
     def __init__(self, asset, data_portal, simulation_dt_func, data_frequency):
         """
         Parameters
@@ -422,6 +483,10 @@ cdef class SidView:
             column = "close"
         elif column == "open_price":
             column = "open"
+        elif column == "dt":
+            return self.dt
+        elif column == "datetime":
+            return self.datetime
 
         return self.data_portal.get_spot_value(
             self.asset,
@@ -453,3 +518,35 @@ cdef class SidView:
     property current_dt:
         def __get__(self):
             return self.simulation_dt_func()
+
+    def mavg(self, num_minutes):
+        self._warn_user("The `mavg` method is deprecated.")
+        return self.data_portal.get_simple_transform(
+            self.asset, "mavg", bars=num_minutes
+        )
+
+    def stddev(self, num_minutes):
+        self._warn_user("The `stddev` method is deprecated.")
+        return self.data_portal.get_simple_transform(
+            self.asset, "stddev", bars=num_minutes
+        )
+
+    def vwap(self, num_minutes):
+        self._warn_user("The `vwap` method is deprecated.")
+        return self.data_portal.get_simple_transform(
+            self.asset, "vwap", bars=num_minutes
+        )
+
+    def returns(self):
+        self._warn_user("The `returns` method is deprecated.")
+        return self.data_portal.get_simple_transform(
+            self.asset, "returns"
+        )
+
+    @staticmethod
+    def _warn_user(msg):
+        warnings.warn(
+            msg,
+            category=ZiplineDeprecationWarning,
+            stacklevel=1
+        )
