@@ -14,6 +14,8 @@
 
 from numpy import dtype, around
 
+from six import iteritems
+
 from zipline.pipeline.data.equity_pricing import USEquityPricing
 from zipline.lib._float64window import AdjustedArrayWindow as Float64Window
 from zipline.lib._int64window import AdjustedArrayWindow as Int64Window
@@ -42,7 +44,7 @@ class Block(object):
         anchor = end_ix - self.cal_start
         while self.window.anchor < anchor:
             self.current = around(next(self.window), 3)
-        return self.current[:, 0]
+        return self.current
 
 
 class USEquityHistoryLoader(object):
@@ -54,55 +56,57 @@ class USEquityHistoryLoader(object):
 
         self._daily_window_blocks = {}
 
-    def _get_adjustments_in_range(self, asset, days, field):
-        sid = int(asset)
+    def _get_adjustments_in_range(self, assets, days, field):
+        sids = {int(asset): i for i, asset in enumerate(assets)}
         start = days[0]
         end = days[-1]
         adjs = {}
-        if field != 'volume':
-            mergers = self._adjustments_reader.get_adjustments_for_sid(
-                'mergers', sid)
-            for m in mergers:
-                dt = m[0]
-                if start < dt <= end:
-                    end_loc = days.get_loc(dt)
-                    adjs[end_loc] = [Float64Multiply(0,
-                                                     end_loc - 1,
-                                                     0,
-                                                     0,
-                                                     m[1])]
-            divs = self._adjustments_reader.get_adjustments_for_sid(
-                'dividends', sid)
+        for sid, i in iteritems(sids):
             if field != 'volume':
-                for d in divs:
-                    dt = d[0]
+                mergers = self._adjustments_reader.get_adjustments_for_sid(
+                    'mergers', sid)
+                for m in mergers:
+                    dt = m[0]
                     if start < dt <= end:
                         end_loc = days.get_loc(dt)
                         adjs[end_loc] = [Float64Multiply(0,
                                                          end_loc - 1,
-                                                         0,
-                                                         0,
-                                                         d[1])]
-        splits = self._adjustments_reader.get_adjustments_for_sid(
-            'splits', sid)
-        for s in splits:
-            dt = s[0]
-            if field == 'volume':
-                ratio = s[1] / 1.0
-            else:
-                ratio = s[1]
-            if start < dt <= end:
-                end_loc = days.get_loc(dt)
-                adjs[end_loc] = [Float64Multiply(0,
-                                                 end_loc - 1,
-                                                 0,
-                                                 0,
-                                                 ratio)]
+                                                         i,
+                                                         i,
+                                                         m[1])]
+                divs = self._adjustments_reader.get_adjustments_for_sid(
+                    'dividends', sid)
+                if field != 'volume':
+                    for d in divs:
+                        dt = d[0]
+                        if start < dt <= end:
+                            end_loc = days.get_loc(dt)
+                            adjs[end_loc] = [Float64Multiply(0,
+                                                             end_loc - 1,
+                                                             i,
+                                                             i,
+                                                             d[1])]
+            splits = self._adjustments_reader.get_adjustments_for_sid(
+                'splits', sid)
+            for s in splits:
+                dt = s[0]
+                if field == 'volume':
+                    ratio = s[1] / 1.0
+                else:
+                    ratio = s[1]
+                if start < dt <= end:
+                    end_loc = days.get_loc(dt)
+                    adjs[end_loc] = [Float64Multiply(0,
+                                                     end_loc - 1,
+                                                     i,
+                                                     i,
+                                                     ratio)]
         return adjs
 
-    def _ensure_block(self, asset, start, end, size, start_ix, end_ix, field):
+    def _ensure_block(self, assets, start, end, size, start_ix, end_ix, field):
+        assets_key = frozenset(assets)
         try:
-            block = self._daily_window_blocks[(asset, field, size)]
+            block = self._daily_window_blocks[(assets_key, field, size)]
             if start_ix >= block.cal_start and end_ix <= block.cal_end:
                 return block
         except KeyError:
@@ -113,10 +117,10 @@ class USEquityHistoryLoader(object):
         prefetch_end_ix = min(end_ix + 40, len(cal) - 1)
         prefetch_end = cal[prefetch_end_ix]
         array = self._daily_reader.load_raw_arrays(
-            [col], start, prefetch_end, [asset])[0]
+            [col], start, prefetch_end, assets)[0]
         days = cal[start_ix:prefetch_end_ix]
         if self._adjustments_reader:
-            adjs = self._get_adjustments_in_range(asset, days, col)
+            adjs = self._get_adjustments_in_range(assets, days, col)
         else:
             adjs = {}
         if field == 'volume':
@@ -135,13 +139,13 @@ class USEquityHistoryLoader(object):
             size
         )
         block = Block(window, start_ix, prefetch_end_ix)
-        self._daily_window_blocks[(asset, field, size)] = block
+        self._daily_window_blocks[(assets_key, field, size)] = block
         return block
 
-    def history(self, asset, start, end, size, field):
+    def history(self, assets, start, end, size, field):
         start_ix = self._calendar.get_loc(start)
         end_ix = self._calendar.get_loc(end)
         block = self._ensure_block(
-            asset, start, end, size, start_ix, end_ix, field)
+            assets, start, end, size, start_ix, end_ix, field)
         # TODO: get most recent value from Window
         return block.get(end_ix)

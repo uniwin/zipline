@@ -1065,16 +1065,15 @@ class DataPortal(object):
             # volumes default to 0, so we don't need to put NaNs in the array
             return_array[:] = np.NAN
 
-        for i, asset in enumerate(assets):
-            data = self._equity_history_loader.history(asset,
-                                                       days_in_window[0],
-                                                       days_in_window[-1],
-                                                       len(days_in_window),
-                                                       field)
-            if extra_slot:
-                return_array[:len(return_array) - 1, i] = data
-            else:
-                return_array[:, i] = data
+        data = self._equity_history_loader.history(assets,
+                                                   days_in_window[0],
+                                                   days_in_window[-1],
+                                                   len(days_in_window),
+                                                   field)
+        if extra_slot:
+            return_array[:len(return_array) - 1, :] = data
+        else:
+            return_array[:] = data
         return return_array
 
     @staticmethod
