@@ -8,8 +8,7 @@ from zipline import TradingAlgorithm
 from zipline.data.minute_bars import BcolzMinuteBarWriter, \
     US_EQUITIES_MINUTES_PER_DAY
 from zipline.finance.trading import TradingEnvironment, SimulationParameters
-from zipline.utils.test_utils import write_minute_data_for_asset
-
+from zipline.utils.test_utils import write_minute_data_for_asset, FakeDataPortal
 
 specific_sid_algo = """
 def initialize(context):
@@ -19,6 +18,29 @@ def initialize(context):
 def handle_data(context, data):
     assert sid(1) in data
     assert sid(2) in data
+"""
+
+order_algo = """
+from zipline.api import sid, order
+def initialize(context):
+    context.count = 0
+
+def handle_data(context, data):
+    if context.count == 0:
+        order(sid(1), 1)
+    elif context.count == 4:
+        assert sid(1) in data
+        assert sid(2) not in data
+    elif context.count == 6:
+        assert sid(1) in data
+        assert sid(2) not in data
+        order(sid(2), 1)
+        assert sid(1) in data
+        assert sid(2) in data
+    elif context.count == 10:
+        assert sid(1) in data
+        assert sid(2) in data
+
 """
 
 
@@ -33,14 +55,15 @@ class TestAPIShim(TestCase):
             end=pd.Timestamp("2016-01-07", tz='UTC')
         )
 
+        equities_data = {}
         for sid in [1, 2]:
-            cls.env.write_data(equities_data={
-                sid: {
+            equities_data[sid] = {
                     "start_date": cls.trading_days[0],
                     "end_date": cls.env.next_trading_day(cls.trading_days[-1]),
-                    "symbol": "ASSET{0}".format(sid)
-                },
-            })
+                    "symbol": "ASSET{0}".format(sid),
+            }
+
+        cls.env.write_data(equities_data=equities_data)
 
         cls.asset1 = cls.env.asset_finder.retrieve_asset(1)
         cls.asset2 = cls.env.asset_finder.retrieve_asset(2)
@@ -62,14 +85,20 @@ class TestAPIShim(TestCase):
         cls.sim_params = SimulationParameters(
             period_start=cls.trading_days[0],
             period_end=cls.trading_days[-1],
-            data_frequency="minute"
+            data_frequency="minute",
+            env=cls.env
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tempdir.cleanup()
 
     @classmethod
     def create_algo(cls, code):
         return TradingAlgorithm(
-            code=code,
-            sim_params=cls.sim_params
+            script=code,
+            sim_params=cls.sim_params,
+            env=cls.env
         )
 
     # FIXME ZIPLINE CAN ONLY TEST ORDERS + POSITIONS!
@@ -101,6 +130,13 @@ class TestAPIShim(TestCase):
 
         self.assertIn(self.asset1, algo.spe._specific_assets)
         pass
+
+    def test_data_warning(self):
+        algo = self.create_algo(order_algo)
+        handler = make_test_handler(self)
+
+        with handler.applicationbound():
+            results = algo.run(FakeDataPortal(self.env))
 
 @nottest
 def make_test_handler(testcase, *args, **kwargs):

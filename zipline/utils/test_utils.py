@@ -822,13 +822,13 @@ def create_data_portal_from_trade_history(env, tempdir, sim_params,
         )
 
 
-class FakeDataPortal(object):
+class FakeDataPortal(DataPortal):
 
-    def __init__(self):
-        self._adjustment_reader = None
+    def __init__(self, env):
+        super(FakeDataPortal, self).__init__(env)
 
-    def setup_offset_cache(self, minutes_by_day, minutes_to_day, trading_days):
-        pass
+    def get_spot_value(self, asset, field, dt, data_frequency):
+        return 1.0
 
 
 class FetcherDataPortal(DataPortal):
@@ -847,9 +847,6 @@ class FetcherDataPortal(DataPortal):
 
         # otherwise just return a fixed value
         return int(asset)
-
-    def setup_offset_cache(self, minutes_by_day, minutes_to_day, trading_days):
-        pass
 
     def _get_daily_window_for_sid(self, asset, field, days_in_window,
                                   extra_slot=True):
