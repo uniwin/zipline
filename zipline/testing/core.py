@@ -6,13 +6,14 @@ from itertools import (
     count,
     product,
 )
+from nose.tools import nottest
 import operator
 import os
 import shutil
 from string import ascii_uppercase
 import tempfile
 
-from logbook import FileHandler
+from logbook import FileHandler, TestHandler
 from mock import patch
 from numpy.testing import assert_allclose, assert_array_equal
 import numpy as np
@@ -209,7 +210,7 @@ def all_pairs_matching_predicate(values, pred):
 
     Examples
     --------
-    >>> from zipline.utils.test_utils import all_pairs_matching_predicate
+    >>> from zipline.testing import all_pairs_matching_predicate
     >>> from operator import eq, lt
     >>> list(all_pairs_matching_predicate(range(5), eq))
     [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]
@@ -664,7 +665,7 @@ def subtest(iterator, *_names):
     """
     Construct a subtest in a unittest.
 
-    Consider using ``zipline.utils.test_utils.parameter_space`` when subtests
+    Consider using ``zipline.testing.parameter_space`` when subtests
     are constructed over a single input or over the cross-product of multiple
     inputs.
 
@@ -717,7 +718,7 @@ def subtest(iterator, *_names):
 
     See Also
     --------
-    zipline.utils.test_utils.parameter_space
+    zipline.testing.parameter_space
     """
     def dec(f):
         @wraps(f)
@@ -847,7 +848,7 @@ def parameter_space(**params):
 
     See Also
     --------
-    zipline.utils.test_utils.subtest
+    zipline.testing.subtest
     """
     def decorator(f):
 
@@ -881,3 +882,26 @@ def parameter_space(**params):
         param_sets = product(*(params[name] for name in argnames))
         return subtest(param_sets, *argnames)(f)
     return decorator
+
+
+@nottest
+def make_test_handler(testcase, *args, **kwargs):
+    """
+    Returns a TestHandler which will be used by the given testcase. This
+    handler can be used to test log messages.
+
+    Parameters
+    ----------
+    testcase: unittest.TestCase
+        The test class in which the log handler will be used.
+    *args, **kwargs
+        Forwarded to the new TestHandler object.
+
+    Returns
+    -------
+    handler: logbook.TestHandler
+        The handler to use for the test case.
+    """
+    handler = TestHandler(*args, **kwargs)
+    testcase.addCleanup(handler.close)
+    return handler

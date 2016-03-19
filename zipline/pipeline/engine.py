@@ -25,7 +25,7 @@ from zipline.errors import NoFurtherDataError
 from zipline.utils.numpy_utils import repeat_first_axis, repeat_last_axis
 from zipline.utils.pandas_utils import explode
 
-from .term import AssetExists
+from .term import AssetExists, LoadableTerm
 
 
 class PipelineEngine(with_metaclass(ABCMeta)):
@@ -83,7 +83,7 @@ class SimplePipelineEngine(object):
     Parameters
     ----------
     get_loader : callable
-        A function that is given an atomic term and returns a PipelineLoader
+        A function that is given a loadable term and returns a PipelineLoader
         to use to retrieve raw data for that term.
     calendar : DatetimeIndex
         Array of dates to consider as trading days when computing a range
@@ -279,12 +279,6 @@ class SimplePipelineEngine(object):
         return out
 
     def get_loader(self, term):
-        # AssetExists is one of the atomic terms in the graph, so we look up
-        # a loader here when grouping by loader, but since it's already in the
-        # workspace, we don't actually use that group.
-        if term is AssetExists():
-            return None
-
         return self._get_loader(term)
 
     def compute_chunk(self, graph, dates, assets, initial_workspace):
@@ -316,14 +310,14 @@ class SimplePipelineEngine(object):
         # Copy the supplied initial workspace so we don't mutate it in place.
         workspace = initial_workspace.copy()
 
-        # If atomic terms share the same loader and extra_rows, load them all
+        # If loadable terms share the same loader and extra_rows, load them all
         # together.
-        atomic_group_key = juxt(get_loader, getitem(graph.extra_rows))
-        atomic_groups = groupby(atomic_group_key, graph.atomic_terms)
+        loader_group_key = juxt(get_loader, getitem(graph.extra_rows))
+        loader_groups = groupby(loader_group_key, graph.loadable_terms)
 
         for term in graph.ordered():
             # `term` may have been supplied in `initial_workspace`, and in the
-            # future we may pre-compute atomic terms coming from the same
+            # future we may pre-compute loadable terms coming from the same
             # dataset.  In either case, we will already have an entry for this
             # term, which we shouldn't re-compute.
             if term in workspace:
@@ -335,9 +329,9 @@ class SimplePipelineEngine(object):
                 term, workspace, graph, dates
             )
 
-            if term.atomic:
+            if isinstance(term, LoadableTerm):
                 to_load = sorted(
-                    atomic_groups[atomic_group_key(term)],
+                    loader_groups[loader_group_key(term)],
                     key=lambda t: t.dataset
                 )
                 loader = get_loader(term)
@@ -390,6 +384,23 @@ class SimplePipelineEngine(object):
         If mask[date, asset] is True, then result.loc[(date, asset), colname]
         will contain the value of data[colname][date, asset].
         """
+        if not mask.any():
+            # Manually handle the empty DataFrame case. This is a workaround
+            # to pandas failing to tz_localize an empty dataframe with a
+            # MultiIndex. It also saves us the work of applying a known-empty
+            # mask to each array.
+            #
+            # Slicing `dates` here to preserve pandas metadata.
+            empty_dates = dates[:0]
+            empty_assets = array([], dtype=object)
+            return DataFrame(
+                data={
+                    name: array([], dtype=arr.dtype)
+                    for name, arr in iteritems(data)
+                },
+                index=MultiIndex.from_arrays([empty_dates, empty_assets]),
+            )
+
         resolved_assets = array(self._finder.retrieve_all(assets))
         dates_kept = repeat_last_axis(dates.values, len(assets))[mask]
         assets_kept = repeat_first_axis(resolved_assets, len(dates))[mask]

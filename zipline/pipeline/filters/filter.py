@@ -13,12 +13,13 @@ from zipline.errors import (
     BadPercentileBounds,
     UnsupportedDataType,
 )
+from zipline.lib.rank import ismissing
 from zipline.pipeline.mixins import (
     CustomTermMixin,
     PositiveWindowLengthMixin,
     SingleInputMixin,
 )
-from zipline.pipeline.term import CompositeTerm
+from zipline.pipeline.term import ComputableTerm
 from zipline.pipeline.expression import (
     BadBinaryOperator,
     FILTER_BINOPS,
@@ -111,7 +112,7 @@ def unary_operator(op):
     return unary_operator
 
 
-class Filter(CompositeTerm):
+class Filter(ComputableTerm):
     """
     Pipeline API expression producing boolean-valued outputs.
     """
@@ -155,7 +156,7 @@ class NumExprFilter(NumericalExpression, Filter):
         """
         Helper for creating new NumExprFactors.
 
-        This is just a wrapper around NumExprFactor.__new__ that always
+        This is just a wrapper around NumericalExpression.__new__ that always
         forwards `bool` as the dtype, since Filters can only be of boolean
         dtype.
         """
@@ -171,6 +172,27 @@ class NumExprFilter(NumericalExpression, Filter):
             assets,
             mask,
         ) & mask
+
+
+class NullFilter(SingleInputMixin, Filter):
+    """
+    A Filter indicating whether input values are missing from an input.
+
+    Parameters
+    ----------
+    factor : zipline.pipeline.factor.Factor
+        The factor to compare against its missing_value.
+    """
+    window_length = 0
+
+    def __new__(cls, factor):
+        return super(NullFilter, cls).__new__(
+            cls,
+            inputs=(factor,),
+        )
+
+    def _compute(self, arrays, dates, assets, mask):
+        return ismissing(arrays[0], self.inputs[0].missing_value)
 
 
 class PercentileFilter(SingleInputMixin, Filter):
